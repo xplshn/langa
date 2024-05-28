@@ -22,8 +22,8 @@ func main() {
 
 	flag.Parse()
 
-	// Show the help page if no arguments are provided
-	if len(os.Args) == 1 {
+	// Show the help page if no arguments are provided and no text is being piped
+	if len(os.Args) == 1 && !isInputPiped() {
 		flag.Usage()
 		os.Exit(0)
 	}
@@ -36,14 +36,18 @@ func main() {
 
 	// Read text input from the user
 	scanner := bufio.NewScanner(os.Stdin)
-	var text string
+	var text strings.Builder
 	for scanner.Scan() {
-		text += scanner.Text() + " "
+		text.WriteString(scanner.Text() + " ")
 	}
-	text = strings.TrimSpace(text)
+	if err := scanner.Err(); err != nil {
+		fmt.Printf("Error reading input: %v\n", err)
+		os.Exit(1)
+	}
+	inputText := strings.TrimSpace(text.String())
 
 	// Translate the text
-	translatedText, err := translateText(*fromLang, *toLang, text)
+	translatedText, err := translateText(*fromLang, *toLang, inputText)
 	if err != nil {
 		fmt.Printf("Translation error: %v\n", err)
 		os.Exit(1)
@@ -51,6 +55,12 @@ func main() {
 
 	// Print the translated text
 	fmt.Println(translatedText)
+}
+
+// isInputPiped checks if the standard input is coming from a pipe
+func isInputPiped() bool {
+	stat, _ := os.Stdin.Stat()
+	return (stat.Mode() & os.ModeCharDevice) == 0
 }
 
 // isValidLanguage checks if a language code is valid
@@ -76,7 +86,7 @@ func translateText(fromLang, toLang, text string) (string, error) {
 		sourceLang = fromLang
 	}
 
-	// Translate the text
+	// Translate the text using the deepl package
 	translateResp, err := deepl.Translate(sourceLang, toLang, text)
 	if err != nil {
 		return "", err
@@ -85,6 +95,5 @@ func translateText(fromLang, toLang, text string) (string, error) {
 	// Extract the translated text from the deepl.Text type
 	translatedText := translateResp.Result.Texts[0].Text
 
-	// Return the translated text as a string
 	return translatedText.Text, nil
 }
